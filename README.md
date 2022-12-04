@@ -4,7 +4,7 @@ Please complete the following exercise as soon as you can:
 
 Trace and cut a polygon out of an image
 
-You can find a live demo of the assignment here: https://tinytap-home-assignment.netlify.app/
+You can find a live demo of the assignment here: [https://gleaming-starburst-4852c5.netlify.app/](https://gleaming-starburst-4852c5.netlify.app/)
 
 ## Getting started
 
