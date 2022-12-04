@@ -6,7 +6,7 @@ import Uploader from '../image/Uploader'
 export default function AppMain() {
     return (
         <div className='min-h-[calc(100vh-80px)] py-8'>
-            <div className="flex gap-x-5 px-10">
+            <div className="flex gap-x-5 px-10 mb-6">
             <ImagesList/>
             <Uploader />
             </div>

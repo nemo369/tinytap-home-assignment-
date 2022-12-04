@@ -1,8 +1,10 @@
 import React, { Fragment, useEffect, useRef, useState } from 'react';
-import { useImageStore } from '../../state/state';
+import { useImageStore, usePuzzleStore } from '../../state/state';
 import { Path, Puzzle } from '../../utils/types';
-import { clearCanvas, createId, drawImage } from '../../utils/utils';
+import { clearCanvas, createId, drawImage, getShapeSize, trimCanvas } from '../../utils/utils';
 import { Transition, Dialog } from '@headlessui/react';
+import RemovePathDialog from '../ui/RemovePathDialog';
+import PuzzlePices from './PuzzlePices';
 
 export default function ImageCanvas() {
   const [shouldCapture, setShouldCapture] = useState(false);
@@ -10,12 +12,18 @@ export default function ImageCanvas() {
   const [paths, setPaths] = useState<Path[]>([]);
   const [puzzlePieces, setPuzzlePieces] = useState<Puzzle[]>([]);
   const { image } = useImageStore(state => state);
+  const { setPuzzles, removePuzzle:removePuzzlePieceFromState } = usePuzzleStore(state => state);
   const canvas = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     clearCanvas(canvas);
     if (image) {
-      drawImage(image, canvas);
+      drawImage(image, canvas).then(() => {
+        puzzlePieces.forEach((puzzle) => {
+          drawPath(puzzle); // sorry for this hacj, but it works
+        });
+      });
+
     }
   }, [image]);
 
@@ -24,29 +32,51 @@ export default function ImageCanvas() {
 
   }
 
-  const drawPath = (paths: Path[]) => {
+  const addPuzzlePiece = ({ctx, id}:{ctx:CanvasRenderingContext2D, id: string}) =>{
+    const shape = getShapeSize(paths);
+    const el = trimCanvas({ canvas: ctx, ...shape });
+    const imgSrc = el.toDataURL();
+    setPuzzles({
+      imgSrc,
+      pathId:id,
+      width: shape.width,
+      height: shape.height,
+      initialLocation:{
+        top: shape.top,
+        left: shape.left,
+        right: shape.right,
+        bottom: shape.bottom,
+      }
+    });
+  }
+  const drawPath = ({paths, id}: Puzzle) => {
     const ctx = canvas.current?.getContext('2d');
     if (ctx) {
+    
+      addPuzzlePiece({ctx, id})
       ctx.beginPath();
       ctx.moveTo(paths[0].x, paths[0].y);
       paths.forEach((path) => {
         ctx.lineTo(path.x, path.y);
       });
-      // ctx.lineTo(paths[0].x, paths[0].y); // close the path
+      ctx.lineTo(paths[0].x, paths[0].y); // close the path
       ctx.strokeStyle = 'white';
       ctx.stroke();
       ctx.closePath();
       //paint the hole (where shape was cut from) in gray
       ctx.fillStyle = '#80808090';
       ctx.fill();
+
+
     }
 
   }
   const onMouseUp = () => {
     setShouldCapture(false);
     if (paths.length > 0) {
-      drawPath(paths);
-      setPuzzlePieces([...puzzlePieces, { paths, id: createId() }]);
+      const newPuzzle ={ paths, id: createId() }
+      drawPath(newPuzzle);
+      setPuzzlePieces([...puzzlePieces, newPuzzle]);
       setPaths([]);
     }
   }
@@ -55,27 +85,37 @@ export default function ImageCanvas() {
     clearCanvas(canvas);
     if (!image) return;
     const newPuzzlePieces = puzzlePieces.filter(puzzle => puzzle.id !== id);
+    removePuzzlePieceFromState(id);
     setPuzzlePieces(newPuzzlePieces);
-    drawImage(image, canvas);
-    //redraw the remaining puzzle pieces
-    newPuzzlePieces.forEach((puzzle) => {
-      setTimeout(() => {
-        drawPath(puzzle.paths); // sorry for this hacj, but it works
-      }, 100);
+    drawImage(image, canvas).then(() => {
+      newPuzzlePieces.forEach((puzzle) => {
+        drawPath(puzzle);
+      });
     });
   }
 
+  const getCanvasHeight = () => {
+    // const image = new Image();
+    return 480;
+  }
   if (!image) {
-    return <div className='text-center'>No image set</div>
+    return <div className='text-center flex gap-x-2 bg-slate-200 max-w-md mx-auto my-2 py-2 px-6 rounded-lg shadow items-end'>
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+      </svg>
+
+      <span>Load Images and chose one to create a puzzle from</span>
+    </div>
   }
   return (
     <>
 
-      <div className='relative bg-gray-50 max-w-md mx-auto'>
+      <div className='relative bg-gray-50 max-w-lg mx-auto' id="canvas-wrapper">
+        <PuzzlePices/>
         <canvas
           onMouseMove={(e) => shouldCapture && startDrawPath(e)}
           onMouseUp={onMouseUp}
-          onMouseDown={() => setShouldCapture(true)} ref={canvas} width={"480"} height={"480"}></canvas>
+          onMouseDown={() => setShouldCapture(true)} ref={canvas} width={"480"} height={getCanvasHeight()}></canvas>
         {
           puzzlePieces.map((puzzlePiece) => (
             <button
@@ -84,50 +124,21 @@ export default function ImageCanvas() {
                 top: puzzlePiece.paths[0].y,
                 left: puzzlePiece.paths[0].x,
               }}>
-              &times;
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-2.5 h-2.5 m-auto">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+
             </button>
           ))
         }
       </div>
-      <Transition show={!!dialogId} as={Fragment}>
-
-        <Dialog open={!!dialogId} onClose={() => setDialogId('')}
-        >
-          <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
-
-          <div className="fixed inset-0 flex items-center justify-center p-4">
-            <Transition.Child
-              as={Fragment}
-              enter="ease-out duration-300"
-              enterFrom="opacity-0 scale-95"
-              enterTo="opacity-100 scale-100"
-              leave="ease-in duration-200"
-              leaveFrom="opacity-100 scale-100"
-              leaveTo="opacity-0 scale-95"
-            >
-              <Dialog.Panel className="mx-auto max-w-md rounded bg-white px-6 py-8">
-                <Dialog.Title className="text-sm  text-gray-500">Remove Pieve</Dialog.Title>
-                <Dialog.Description className="text-lg bold mb-10">
-                  Are you sure you want to delete this piece?
-                </Dialog.Description>
-                <div className="flex gap-x-4 py-6 justify-end" >
-                <button onClick={() => setDialogId('')}
-                    className='bg-gray-500 text-white px-6 py-2 rounded'
-                  >Cancel</button>
-                  <button
-                    className='bg-red-500 text-white px-6 py-2 rounded'
-                    onClick={() => {
-                      removePuzzlePiece(dialogId)
-                      setDialogId('');
-                    }}>Delete</button>
-                 
-                </div>
-              </Dialog.Panel>
-            </Transition.Child>
-          </div>
-        </Dialog>
-      </Transition>
-      <h2 className='px-6 py-2 bg-blue-200 mx-6 rounded-md text-sm italic mt-2 text-gray-600'>Please draw a path to create a puzzle piece</h2>
+      <RemovePathDialog dialogId={dialogId} removePuzzlePiece={removePuzzlePiece} setDialogId={setDialogId} />
+      <h2 className='px-6 py-2 bg-blue-200 rounded-md text-sm italic mt-2 text-gray-600 flex gap-x-1 items-center w-max mx-auto'>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+        </svg>
+        <span>Please draw a path to create a puzzle piece, (click and drag on the image)</span>
+      </h2>
     </>
   )
 }
