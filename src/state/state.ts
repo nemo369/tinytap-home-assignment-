@@ -28,7 +28,8 @@ interface PuzzleState {
 const usePuzzleStore = create<PuzzleState>((set) => ({
   puzzles: [],
   setPuzzles: (puzzle) => set((state) => {
-    return {...state, puzzles: [...state.puzzles, puzzle]}
+    const oldSate = state.puzzles.filter((p) => p.pathId !== puzzle.pathId)
+    return {...state, puzzles: [...oldSate, puzzle]}
   }),
   removePuzzle: (id) => set((state) => {
     return {...state, puzzles: state.puzzles.filter((puzzle) => puzzle.pathId !== id)}

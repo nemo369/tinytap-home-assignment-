@@ -17,7 +17,6 @@ const Piece = ({ puzzle }: { puzzle: PuzzlePiece }) => {
         onMouseDown={() => setIsDragging(true)}
         onMouseUp={() => setIsDragging(false)}
         onMouseMove={(e) => {
-            console.log(isDragging);
             if (isDragging) {
                 e.stopPropagation();
                 drag(e)

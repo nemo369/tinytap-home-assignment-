@@ -1,8 +1,7 @@
-import React, { Fragment, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useImageStore, usePuzzleStore } from '../../state/state';
 import { Path, Puzzle } from '../../utils/types';
 import { clearCanvas, createId, drawImage, getShapeSize, trimCanvas } from '../../utils/utils';
-import { Transition, Dialog } from '@headlessui/react';
 import RemovePathDialog from '../ui/RemovePathDialog';
 import PuzzlePices from './PuzzlePices';
 
@@ -12,15 +11,23 @@ export default function ImageCanvas() {
   const [paths, setPaths] = useState<Path[]>([]);
   const [puzzlePieces, setPuzzlePieces] = useState<Puzzle[]>([]);
   const { image } = useImageStore(state => state);
-  const { setPuzzles, removePuzzle:removePuzzlePieceFromState } = usePuzzleStore(state => state);
+  const { setPuzzles, removePuzzle: removePuzzlePieceFromState } = usePuzzleStore(state => state);
   const canvas = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     clearCanvas(canvas);
+    const ctx = canvas.current?.getContext('2d',{ willReadFrequently: true })!;
+
     if (image) {
+      puzzlePieces.forEach((puzzle) => {
+        removePuzzlePieceFromState(puzzle.id);
+      });
+
       drawImage(image, canvas).then(() => {
         puzzlePieces.forEach((puzzle) => {
-          drawPath(puzzle); // sorry for this hacj, but it works
+          removePuzzlePieceFromState(puzzle.id);
+          addPuzzlePiece(ctx, puzzle.id, puzzle.paths);
+          drawPath(puzzle); // sorry for this hack, but it works
         });
       });
 
@@ -32,16 +39,16 @@ export default function ImageCanvas() {
 
   }
 
-  const addPuzzlePiece = ({ctx, id}:{ctx:CanvasRenderingContext2D, id: string}) =>{
+  const addPuzzlePiece = (ctx: CanvasRenderingContext2D, id: string, paths:Path[]) => {
     const shape = getShapeSize(paths);
     const el = trimCanvas({ canvas: ctx, ...shape });
     const imgSrc = el.toDataURL();
     setPuzzles({
       imgSrc,
-      pathId:id,
+      pathId: id,
       width: shape.width,
       height: shape.height,
-      initialLocation:{
+      initialLocation: {
         top: shape.top,
         left: shape.left,
         right: shape.right,
@@ -49,11 +56,11 @@ export default function ImageCanvas() {
       }
     });
   }
-  const drawPath = ({paths, id}: Puzzle) => {
+  const drawPath = ({ paths, id }: Puzzle) => {
     const ctx = canvas.current?.getContext('2d');
     if (ctx) {
-    
-      addPuzzlePiece({ctx, id})
+
+      addPuzzlePiece(ctx, id, paths);
       ctx.beginPath();
       ctx.moveTo(paths[0].x, paths[0].y);
       paths.forEach((path) => {
@@ -74,7 +81,7 @@ export default function ImageCanvas() {
   const onMouseUp = () => {
     setShouldCapture(false);
     if (paths.length > 0) {
-      const newPuzzle ={ paths, id: createId() }
+      const newPuzzle = { paths, id: createId() }
       drawPath(newPuzzle);
       setPuzzlePieces([...puzzlePieces, newPuzzle]);
       setPaths([]);
@@ -111,7 +118,7 @@ export default function ImageCanvas() {
     <>
 
       <div className='relative bg-gray-50 max-w-lg mx-auto' id="canvas-wrapper">
-        <PuzzlePices/>
+        <PuzzlePices />
         <canvas
           onMouseMove={(e) => shouldCapture && startDrawPath(e)}
           onMouseUp={onMouseUp}
